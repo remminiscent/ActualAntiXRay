@@ -32,6 +32,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
 
     private ThreadSafeArray $replaceableBlocks;
     private ThreadSafeArray $replacingBlocks;
+    private int $replacingBlocksMaxIndex;
 
     private int $worldMinY;
     private int $worldMaxY;
@@ -56,6 +57,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
             VanillaBlocks::DIAMOND_ORE()->getStateId(),
             VanillaBlocks::EMERALD_ORE()->getStateId()
         ]);
+        $this->replacingBlocksMaxIndex = count($this->replacingBlocks) - 1;
 
         $this->worldMinY = $world->getMinY();
         $this->worldMaxY = $world->getMaxY();
@@ -144,7 +146,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
                         if (!$this->isBlockReplaceable($explorer, $x - 1, $y, $z, $subChunkY)) continue;
                         if (!$this->isBlockReplaceable($explorer, $x + 1, $y, $z, $subChunkY)) continue;
 
-                        $randomBlockId = $this->replacingBlocks[mt_rand(0, count($this->replacingBlocks) - 1)];
+                        $randomBlockId = $this->replacingBlocks[mt_rand(0, $this->replacingBlocksMaxIndex)];
                         $explorer->moveToChunk($this->chunkX, $subChunkY, $this->chunkZ);
                         assert($explorer->currentSubChunk instanceof SubChunk);
                         $explorer->currentSubChunk->setBlockStateId($x, $y, $z, $randomBlockId);
