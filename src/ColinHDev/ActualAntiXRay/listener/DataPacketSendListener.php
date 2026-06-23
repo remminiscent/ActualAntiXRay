@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace ColinHDev\ActualAntiXRay\listener;
 
 use ColinHDev\ActualAntiXRay\ResourceManager;
+use pmmp\encoding\ByteBufferWriter;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\NetworkSession;
-use pocketmine\network\mcpe\protocol\serializer\PacketSerializer;
 use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
 use pocketmine\world\World;
 use function array_filter;
@@ -90,7 +90,7 @@ class DataPacketSendListener implements Listener {
             $world = $applyableWorlds[$worldName];
             foreach ($world->createBlockUpdatePackets($positionsToUpdate) as $packet) {
                 foreach($worldTargets as $target) {
-                    $target->addToSendBuffer(NetworkSession::encodePacketTimed(PacketSerializer::encoder($target->getPacketSerializerContext()), $packet));
+                    $target->addToSendBuffer(NetworkSession::encodePacketTimed(new ByteBufferWriter(), $packet));
                 }
             }
         }

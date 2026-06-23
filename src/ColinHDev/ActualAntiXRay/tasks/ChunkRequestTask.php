@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ColinHDev\ActualAntiXRay\tasks;
 
 use ColinHDev\ActualAntiXRay\utils\SubChunkExplorer;
+use pmmp\encoding\ByteBufferWriter;
 use pmmp\thread\ThreadSafeArray;
 use pocketmine\block\VanillaBlocks;
 use pocketmine\math\Facing;
@@ -15,11 +16,9 @@ use pocketmine\network\mcpe\compression\Compressor;
 use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\protocol\LevelChunkPacket;
 use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
-use pocketmine\network\mcpe\protocol\serializer\PacketSerializerContext;
 use pocketmine\network\mcpe\protocol\types\ChunkPosition;
 use pocketmine\network\mcpe\serializer\ChunkSerializer;
 use pocketmine\utils\AssumptionFailedError;
-use pocketmine\utils\BinaryStream;
 use pocketmine\world\ChunkLoader;
 use pocketmine\world\format\Chunk;
 use pocketmine\world\format\io\FastChunkSerializer;
@@ -27,6 +26,7 @@ use pocketmine\world\format\SubChunk;
 use pocketmine\world\SimpleChunkManager;
 use pocketmine\world\World;
 use function assert;
+use function chr;
 use function is_array;
 use function is_int;
 use function mt_rand;
@@ -38,12 +38,13 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
 
     private int $worldMinY;
     private int $worldMaxY;
+    private int $dimensionId;
 
     private string $adjacentChunks;
     private string $tiles;
 
-    public function __construct(World $world, int $chunkX, int $chunkZ, Chunk $chunk, CompressBatchPromise $promise, Compressor $compressor, ?\Closure $onError = null) {
-        parent::__construct($chunkX, $chunkZ, $chunk, $promise, $compressor, $onError);
+    public function __construct(World $world, int $chunkX, int $chunkZ, int $dimensionId, Chunk $chunk, CompressBatchPromise $promise, Compressor $compressor) {
+        parent::__construct($chunkX, $chunkZ, $dimensionId, $chunk, $promise, $compressor);
         $this->replaceableBlocks = ThreadSafeArray::fromArray([
             VanillaBlocks::STONE()->getStateId() => true,
             VanillaBlocks::DIRT()->getStateId() => true,
@@ -61,6 +62,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
 
         $this->worldMinY = $world->getMinY();
         $this->worldMaxY = $world->getMaxY();
+        $this->dimensionId = $dimensionId;
 
         $this->tiles = ChunkSerializer::serializeTiles($chunk);
 
@@ -91,11 +93,8 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
         $adjacentChunks = igbinary_unserialize($this->adjacentChunks);
         assert(is_array($adjacentChunks));
         $chunks = array_map(
-            static fn (?string $serialized) => $serialized !== null ? FastChunkSerializer::deserializeTerrain($serialized) : null,
-            array_merge(
-                [World::chunkHash(0, 0) => $this->chunk],
-                $adjacentChunks
-            )
+            static fn(?string $serialized) => $serialized !== null ? FastChunkSerializer::deserializeTerrain($serialized) : null,
+            [World::chunkHash(0, 0) => $this->chunk] + $adjacentChunks
         );
         $manager = new SimpleChunkManager($this->worldMinY, $this->worldMaxY);
         foreach($chunks as $relativeChunkHash => $chunk) {
@@ -124,7 +123,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
                         if (!$this->isBlockReplaceable($explorer, $vector, $subChunkY)) {
                             // If the current block is not replaceable, we can increment the y coordinate by one,
                             // as we can skip the following loop which would check that block again as block below.
-                            $y++;
+                            if (($subChunkY << 4) + $y !== $this->worldMinY && ($subChunkY << 4) + $y !== 0) $y++;
                             continue;
                         }
 
@@ -137,6 +136,9 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
                         foreach (Facing::ALL as $facing) {
                             $blockSide = $vector->getSide($facing);
                             if (!$this->isBlockReplaceable($explorer, $blockSide, $subChunkY)) {
+                                if ($facing === Facing::DOWN && (($subChunkY << 4) + $y === $this->worldMinY + 1 || ($subChunkY << 4) + $y === 1)) {
+                                    continue;
+                                }
                                 if ($facing === Facing::UP) {
                                     // If the block above is not replaceable, we can increment the y coordinate by two,
                                     // as we can skip the following two loops which would check that block again.
@@ -149,6 +151,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
                         }
 
                         $randomBlockId = $this->replacingBlocks[mt_rand(0, count($this->replacingBlocks) - 1)];
+                        $explorer->moveToChunk($this->chunkX, $subChunkY, $this->chunkZ);
                         assert($explorer->currentSubChunk instanceof SubChunk);
                         $explorer->currentSubChunk->setBlockStateId($x, $y, $z, $randomBlockId);
                     }
@@ -158,14 +161,14 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
 
         $chunk = $manager->getChunk($this->chunkX, $this->chunkZ);
         assert($chunk instanceof Chunk);
-        $subCount = ChunkSerializer::getSubChunkCount($chunk);
+        $subCount = ChunkSerializer::getSubChunkCount($chunk, $this->dimensionId);
         $converter = TypeConverter::getInstance();
-        $encoderContext = new PacketSerializerContext($converter->getItemTypeDictionary());
-        $payload = ChunkSerializer::serializeFullChunk($chunk, $converter->getBlockTranslator(), $encoderContext, $this->tiles);
+        $payload = ChunkSerializer::serializeFullChunk($chunk, $this->dimensionId, $converter->getBlockTranslator(), $this->tiles);
 
-        $stream = new BinaryStream();
-        PacketBatch::encodePackets($stream, $encoderContext, [LevelChunkPacket::create(new ChunkPosition($this->chunkX, $this->chunkZ), $subCount, false, null, $payload)]);
-        $this->setResult($this->compressor->deserialize()->compress($stream->getBuffer()));
+        $stream = new ByteBufferWriter();
+        PacketBatch::encodePackets($stream, [LevelChunkPacket::create(new ChunkPosition($this->chunkX, $this->chunkZ), $this->dimensionId, $subCount, false, null, $payload)]);
+        $compressor = $this->compressor->deserialize();
+        $this->setResult(chr($compressor->getNetworkId()) . $compressor->compress($stream->getData()));
     }
 
     private function isBlockReplaceable(SubChunkExplorer $explorer, Vector3 $vector, int $subChunkY) : bool {
