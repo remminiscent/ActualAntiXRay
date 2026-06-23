@@ -5,12 +5,14 @@ namespace ColinHDev\ActualAntiXRay;
 use pocketmine\utils\Config;
 use pocketmine\utils\SingletonTrait;
 use function is_array;
+use function is_int;
 use function is_string;
 
 class ResourceManager {
     use SingletonTrait;
 
     private bool $default;
+    private int $revertRadius = 2;
     /** @var array<string, true> */
     private array $worlds = [];
 
@@ -31,11 +33,19 @@ class ResourceManager {
                 }
             }
         }
+        $revertRadius = $config->get("revert-radius", 2);
+        if (is_int($revertRadius) && $revertRadius >= 0) {
+            $this->revertRadius = $revertRadius;
+        }
     }
 
     public function isEnabledForWorld(string $worldName) : bool {
         return
             ($this->default && !isset($this->worlds[$worldName])) ||
             (!$this->default && isset($this->worlds[$worldName]));
+    }
+
+    public function getRevertRadius() : int {
+        return $this->revertRadius;
     }
 }

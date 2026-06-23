@@ -13,9 +13,9 @@ use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
 use pocketmine\world\World;
+use function abs;
 use function array_filter;
 use function array_key_exists;
-use function array_merge;
 use function count;
 
 class DataPacketSendListener implements Listener {
@@ -60,11 +60,16 @@ class DataPacketSendListener implements Listener {
                     $positionsToUpdatePerWorld[$worldName] = [];
                 }
                 $positionsToUpdatePerWorld[$worldName][World::blockHash($x, $y, $z)] = null;
-                foreach((new Vector3($x, $y, $z))->sides() as $point) {
-                    foreach(array_merge([$point], $point->sidesArray()) as $point2) {
-                        $hash = World::blockHash($point2->getFloorX(), $point2->getFloorY(), $point2->getFloorZ());
-                        if (!array_key_exists($hash, $positionsToUpdatePerWorld[$worldName])) {
-                            $positionsToUpdatePerWorld[$worldName][$hash] = $point2;
+                $revertRadius = ResourceManager::getInstance()->getRevertRadius();
+                for ($xOffset = -$revertRadius; $xOffset <= $revertRadius; $xOffset++) {
+                    for ($yOffset = -$revertRadius; $yOffset <= $revertRadius; $yOffset++) {
+                        for ($zOffset = -$revertRadius; $zOffset <= $revertRadius; $zOffset++) {
+                            if (abs($xOffset) + abs($yOffset) + abs($zOffset) > $revertRadius) continue;
+                            $point = new Vector3($x + $xOffset, $y + $yOffset, $z + $zOffset);
+                            $hash = World::blockHash($point->getFloorX(), $point->getFloorY(), $point->getFloorZ());
+                            if (!array_key_exists($hash, $positionsToUpdatePerWorld[$worldName])) {
+                                $positionsToUpdatePerWorld[$worldName][$hash] = $point;
+                            }
                         }
                     }
                 }

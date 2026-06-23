@@ -4,3 +4,6 @@
 mode: "blacklist"
 # List names of worlds here.
 worlds: []
+
+# How far fake ores should be reverted to their real blocks from an updated block.
+revert-radius: 2
