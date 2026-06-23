@@ -26,6 +26,7 @@ use pocketmine\world\World;
 use function assert;
 use function chr;
 use function is_array;
+use function is_int;
 use function mt_rand;
 
 class ChunkRequestTask extends PMMPChunkRequestTask {
@@ -100,7 +101,10 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
             if (!($chunk instanceof Chunk)) {
                 continue;
             }
+            $relativeChunkX = null;
+            $relativeChunkZ = null;
             World::getXZ($relativeChunkHash, $relativeChunkX, $relativeChunkZ);
+            if (!is_int($relativeChunkX) || !is_int($relativeChunkZ)) continue;
             $manager->setChunk($this->chunkX + $relativeChunkX, $this->chunkZ + $relativeChunkZ, $chunk);
         }
 
