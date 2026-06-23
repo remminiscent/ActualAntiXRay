@@ -8,8 +8,6 @@ use ColinHDev\ActualAntiXRay\utils\SubChunkExplorer;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\thread\ThreadSafeArray;
 use pocketmine\block\VanillaBlocks;
-use pocketmine\math\Facing;
-use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\ChunkRequestTask as PMMPChunkRequestTask;
 use pocketmine\network\mcpe\compression\CompressBatchPromise;
 use pocketmine\network\mcpe\compression\Compressor;
@@ -28,7 +26,6 @@ use pocketmine\world\World;
 use function assert;
 use function chr;
 use function is_array;
-use function is_int;
 use function mt_rand;
 
 class ChunkRequestTask extends PMMPChunkRequestTask {
@@ -119,8 +116,7 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
                         if ($subChunkY === Chunk::MIN_SUBCHUNK_INDEX && $y === 0) continue;
                         if ($subChunkY + 1 === Chunk::MAX_SUBCHUNK_INDEX && $y === 15) continue;
 
-                        $vector = new Vector3($x, $y, $z);
-                        if (!$this->isBlockReplaceable($explorer, $vector, $subChunkY)) {
+                        if (!$this->isBlockReplaceable($explorer, $x, $y, $z, $subChunkY)) {
                             // If the current block is not replaceable, we can increment the y coordinate by one,
                             // as we can skip the following loop which would check that block again as block below.
                             if (($subChunkY << 4) + $y !== $this->worldMinY && ($subChunkY << 4) + $y !== 0) $y++;
@@ -133,22 +129,20 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
                             continue;
                         }
 
-                        foreach (Facing::ALL as $facing) {
-                            $blockSide = $vector->getSide($facing);
-                            if (!$this->isBlockReplaceable($explorer, $blockSide, $subChunkY)) {
-                                if ($facing === Facing::DOWN && (($subChunkY << 4) + $y === $this->worldMinY + 1 || ($subChunkY << 4) + $y === 1)) {
-                                    continue;
-                                }
-                                if ($facing === Facing::UP) {
-                                    // If the block above is not replaceable, we can increment the y coordinate by two,
-                                    // as we can skip the following two loops which would check that block again.
-                                    // First, as the "main" block, then as the block below.
-                                    $y += 2;
-                                    continue 2;
-                                }
-                                continue 2;
-                            }
+                        if (!$this->isBlockReplaceable($explorer, $x, $y - 1, $z, $subChunkY)) {
+                            if (!(($subChunkY << 4) + $y === $this->worldMinY + 1 || ($subChunkY << 4) + $y === 1)) continue;
                         }
+                        if (!$this->isBlockReplaceable($explorer, $x, $y + 1, $z, $subChunkY)) {
+                            // If the block above is not replaceable, we can increment the y coordinate by two,
+                            // as we can skip the following two loops which would check that block again.
+                            // First, as the "main" block, then as the block below.
+                            $y += 2;
+                            continue;
+                        }
+                        if (!$this->isBlockReplaceable($explorer, $x, $y, $z - 1, $subChunkY)) continue;
+                        if (!$this->isBlockReplaceable($explorer, $x, $y, $z + 1, $subChunkY)) continue;
+                        if (!$this->isBlockReplaceable($explorer, $x - 1, $y, $z, $subChunkY)) continue;
+                        if (!$this->isBlockReplaceable($explorer, $x + 1, $y, $z, $subChunkY)) continue;
 
                         $randomBlockId = $this->replacingBlocks[mt_rand(0, count($this->replacingBlocks) - 1)];
                         $explorer->moveToChunk($this->chunkX, $subChunkY, $this->chunkZ);
@@ -171,10 +165,8 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
         $this->setResult(chr($compressor->getNetworkId()) . $compressor->compress($stream->getData()));
     }
 
-    private function isBlockReplaceable(SubChunkExplorer $explorer, Vector3 $vector, int $subChunkY) : bool {
+    private function isBlockReplaceable(SubChunkExplorer $explorer, int $x, int $y, int $z, int $subChunkY) : bool {
         $chunkX = $this->chunkX;
-        $x = $vector->getX();
-        assert(is_int($x));
         if ($x < 0) {
             $x = 15;
             $chunkX--;
@@ -184,8 +176,6 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
         }
 
         $chunkZ = $this->chunkZ;
-        $z = $vector->getZ();
-        assert(is_int($z));
         if ($z < 0) {
             $z = 15;
             $chunkZ--;
@@ -194,8 +184,6 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
             $chunkZ++;
         }
 
-        $y = $vector->getY();
-        assert(is_int($y));
         if ($y < 0) {
             $y = 15;
             $subChunkY--;
