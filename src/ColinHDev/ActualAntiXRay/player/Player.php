@@ -6,6 +6,7 @@ namespace ColinHDev\ActualAntiXRay\player;
 
 use ColinHDev\ActualAntiXRay\ResourceManager;
 use ColinHDev\ActualAntiXRay\tasks\ChunkRequestTask;
+use ColinHDev\ActualAntiXRay\utils\ReflectionCache;
 use pocketmine\event\player\PlayerPostChunkSendEvent;
 use pocketmine\network\mcpe\cache\ChunkCache;
 use pocketmine\network\mcpe\compression\CompressBatchPromise;
@@ -15,7 +16,6 @@ use pocketmine\player\UsedChunkStatus;
 use pocketmine\timings\Timings;
 use pocketmine\utils\Utils;
 use pocketmine\world\World;
-use ReflectionProperty;
 use function is_string;
 
 class Player extends PMMP_PLAYER {
@@ -40,9 +40,9 @@ class Player extends PMMP_PLAYER {
         $count = 0;
         $world = $this->getWorld();
 
-        $activeChunkGenerationRequestsProperty = new ReflectionProperty(PMMP_PLAYER::class, "activeChunkGenerationRequests");
+        $activeChunkGenerationRequestsProperty = ReflectionCache::get(PMMP_PLAYER::class, "activeChunkGenerationRequests");
         $activeChunkGenerationRequests = $activeChunkGenerationRequestsProperty->getValue($this);
-        $tickingChunksProperty = new ReflectionProperty(PMMP_PLAYER::class, "tickingChunks");
+        $tickingChunksProperty = ReflectionCache::get(PMMP_PLAYER::class, "tickingChunks");
         $tickingChunks = $tickingChunksProperty->getValue($this);
 
         $limit = $this->chunksPerTick - count($activeChunkGenerationRequests);
@@ -163,7 +163,7 @@ class Player extends PMMP_PLAYER {
      * @return CompressBatchPromise|string a promise of resolution which will contain a compressed chunk packet, or the compressed chunk packet.
      */
     public function request(ChunkCache $chunkCache, int $chunkX, int $chunkZ) : CompressBatchPromise|string{
-        $property = new ReflectionProperty(ChunkCache::class, "world");
+        $property = ReflectionCache::get(ChunkCache::class, "world");
         /** @var World $world */
         $world = $property->getValue($chunkCache);
 
@@ -174,12 +174,12 @@ class Player extends PMMP_PLAYER {
         }
         $chunkHash = World::chunkHash($chunkX, $chunkZ);
 
-        $cacheProperty = new ReflectionProperty(ChunkCache::class, "caches");
+        $cacheProperty = ReflectionCache::get(ChunkCache::class, "caches");
         /** @var array<int, CompressBatchPromise|string> $caches */
         $caches = $cacheProperty->getValue($chunkCache);
 
         if(isset($caches[$chunkHash])){
-            $property = new ReflectionProperty(ChunkCache::class, "hits");
+            $property = ReflectionCache::get(ChunkCache::class, "hits");
             /** @var int $hits */
             $hits = $property->getValue($chunkCache);
             $property->setValue($chunkCache, $hits + 1);
@@ -187,7 +187,7 @@ class Player extends PMMP_PLAYER {
             return $caches[$chunkHash];
         }
 
-        $property = new ReflectionProperty(ChunkCache::class, "misses");
+        $property = ReflectionCache::get(ChunkCache::class, "misses");
         /** @var int $misses */
         $misses = $property->getValue($chunkCache);
         $property->setValue($chunkCache, $misses + 1);
@@ -197,11 +197,11 @@ class Player extends PMMP_PLAYER {
             $caches[$chunkHash] = new CompressBatchPromise();
             $cacheProperty->setValue($chunkCache, $caches);
 
-            $property = new ReflectionProperty(ChunkCache::class, "compressor");
+            $property = ReflectionCache::get(ChunkCache::class, "compressor");
             /** @var Compressor $compressor */
             $compressor = $property->getValue($chunkCache);
 
-            $property = new ReflectionProperty(ChunkCache::class, "dimensionId");
+            $property = ReflectionCache::get(ChunkCache::class, "dimensionId");
             /** @var int $dimensionId */
             $dimensionId = $property->getValue($chunkCache);
 
@@ -217,7 +217,7 @@ class Player extends PMMP_PLAYER {
                 )
             );
             $caches[$chunkHash]->onResolve(function(CompressBatchPromise $promise) use ($chunkCache, $chunkHash) : void{
-                $property = new ReflectionProperty(ChunkCache::class, "caches");
+                $property = ReflectionCache::get(ChunkCache::class, "caches");
                 /** @var array<int, CompressBatchPromise|string> $caches */
                 $caches = $property->getValue($chunkCache);
                 if(($caches[$chunkHash] ?? null) === $promise){
