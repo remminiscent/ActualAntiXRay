@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ColinHDev\ActualAntiXRay\tasks;
 
+use ColinHDev\ActualAntiXRay\ResourceManager;
 use ColinHDev\ActualAntiXRay\utils\SubChunkExplorer;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\thread\ThreadSafeArray;
-use pocketmine\block\VanillaBlocks;
 use pocketmine\network\mcpe\ChunkRequestTask as PMMPChunkRequestTask;
 use pocketmine\network\mcpe\compression\CompressBatchPromise;
 use pocketmine\network\mcpe\compression\Compressor;
@@ -23,6 +23,7 @@ use pocketmine\world\format\io\FastChunkSerializer;
 use pocketmine\world\format\SubChunk;
 use pocketmine\world\SimpleChunkManager;
 use pocketmine\world\World;
+use function array_fill_keys;
 use function assert;
 use function chr;
 use function is_array;
@@ -44,20 +45,9 @@ class ChunkRequestTask extends PMMPChunkRequestTask {
 
     public function __construct(World $world, int $chunkX, int $chunkZ, int $dimensionId, Chunk $chunk, CompressBatchPromise $promise, Compressor $compressor) {
         parent::__construct($chunkX, $chunkZ, $dimensionId, $chunk, $promise, $compressor);
-        $this->replaceableBlocks = ThreadSafeArray::fromArray([
-            VanillaBlocks::STONE()->getStateId() => true,
-            VanillaBlocks::DIRT()->getStateId() => true,
-            VanillaBlocks::GRAVEL()->getStateId() => true
-        ]);
-        $this->replacingBlocks = ThreadSafeArray::fromArray([
-            VanillaBlocks::COAL_ORE()->getStateId(),
-            VanillaBlocks::IRON_ORE()->getStateId(),
-            VanillaBlocks::LAPIS_LAZULI_ORE()->getStateId(),
-            VanillaBlocks::REDSTONE_ORE()->getStateId(),
-            VanillaBlocks::GOLD_ORE()->getStateId(),
-            VanillaBlocks::DIAMOND_ORE()->getStateId(),
-            VanillaBlocks::EMERALD_ORE()->getStateId()
-        ]);
+        $resourceManager = ResourceManager::getInstance();
+        $this->replaceableBlocks = ThreadSafeArray::fromArray(array_fill_keys($resourceManager->getReplaceableBlockStateIds(), true));
+        $this->replacingBlocks = ThreadSafeArray::fromArray($resourceManager->getReplacingBlockStateIds());
         $this->replacingBlocksMaxIndex = count($this->replacingBlocks) - 1;
 
         $this->worldMinY = $world->getMinY();

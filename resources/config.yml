@@ -5,5 +5,21 @@ mode: "blacklist"
 # List names of worlds here.
 worlds: []
 
-# How far fake ores should be reverted to their real blocks from an updated block.
+# How far fake blocks should be reverted to their real blocks from an updated block.
 revert-radius: 2
+
+# Blocks that fake blocks are allowed to replace.
+replaceable-blocks:
+  - "minecraft:stone"
+  - "minecraft:dirt"
+  - "minecraft:gravel"
+
+# Blocks used as fake blocks.
+replacing-blocks:
+  - "minecraft:coal_ore"
+  - "minecraft:iron_ore"
+  - "minecraft:lapis_lazuli_ore"
+  - "minecraft:redstone_ore"
+  - "minecraft:gold_ore"
+  - "minecraft:diamond_ore"
+  - "minecraft:emerald_ore"
